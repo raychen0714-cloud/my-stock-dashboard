@@ -1,0 +1,53 @@
+{
+    "etfs": [
+        {
+            "symbol": "0050.TW",
+            "name": "元大台灣50",
+            "shares": 2000,
+            "cost": 90.58,
+            "manual_pnl": -592
+        },
+        {
+            "symbol": "0056.TW",
+            "name": "元大高股息",
+            "shares": 25000,
+            "cost": 38.77,
+            "manual_pnl": 50680
+        },
+        {
+            "symbol": "00631L.TW",
+            "name": "元大台灣50正2",
+            "shares": 13000,
+            "cost": 27.25,
+            "manual_pnl": 16758
+        },
+        {
+            "symbol": "00878.TW",
+            "name": "國泰永續高股息",
+            "shares": 13000,
+            "cost": 23.07,
+            "manual_pnl": 29345
+        },
+        {
+            "symbol": "00919.TW",
+            "name": "群益台灣精選高息",
+            "shares": 12000,
+            "cost": 22.73,
+            "manual_pnl": 10392
+        },
+        {
+            "symbol": "00927.TW",
+            "name": "群益半導體收益",
+            "shares": 20000,
+            "cost": 28.65,
+            "manual_pnl": 22096
+        },
+        {
+            "symbol": "00981A.TW",
+            "name": "主動統一台股增長",
+            "shares": 12000,
+            "cost": 27.77,
+            "manual_pnl": 5246
+        }
+    ]
+}
