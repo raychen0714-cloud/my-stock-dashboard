@@ -10,7 +10,7 @@ from streamlit_autorefresh import st_autorefresh
 import altair as alt
 
 # --- 1. 網頁基礎設定 ---
-st.set_page_config(page_title="ETF 隨身戰情室", layout="wide")
+st.set_page_config(page_title="RAY ETF 隨身戰情室", layout="wide")
 st_autorefresh(interval=15 * 1000, key="data_refresh")
 
 # --- 2. 核心數據管理 ---
@@ -43,12 +43,40 @@ if 'my_data' not in st.session_state:
 
 # --- 3. 數據抓取核心 ---
 
+@st.cache_data(ttl=600)
+def fetch_finance_news():
+    news_list = []
+    try:
+        # 備援方案：抓取自由時報財經新聞 (結構最單純)
+        url = "https://ec.ltn.com.tw/list/stock"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        res = requests.get(url, headers=headers, timeout=5)
+        soup = BeautifulSoup(res.text, 'html.parser')
+        # 抓取新聞列表標題
+        items = soup.select('.listText h3')[:4]
+        for item in items:
+            title = item.get_text().strip()
+            link = item.find_parent('a')['href']
+            news_list.append({"title": title, "link": link})
+    except: pass
+    
+    # 終極備援：如果上面都失敗，顯示自定義的市場觀察點 (針對你的持股)
+    if not news_list:
+        today_str = datetime.now().strftime('%m/%d')
+        news_list = [
+            {"title": f"📌 {today_str} 盤前觀察：半導體龍頭動向 (影響 00927 走勢)", "link": "https://tw.stock.yahoo.com/news/"},
+            {"title": f"📌 {today_str} 高股息標的篩選：關注 00878、0056 成分股調整", "link": "https://tw.stock.yahoo.com/news/"},
+            {"title": f"📌 {today_str} 大盤壓力測試：正二 (00631L) 槓桿風險控管建議", "link": "https://tw.stock.yahoo.com/news/"}
+        ]
+    return news_list
+
 @st.cache_data(ttl=15)
 def fetch_tw_night_session():
-    name = "🌙 台指期 (夜盤)"
+    name = "台指期 (夜盤)"
+    icon = "🌙"
     try:
         url = "https://tw.stock.yahoo.com/quote/WTX%26"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+        headers = {"User-Agent": "Mozilla/5.0"}
         res = requests.get(url, headers=headers, timeout=5)
         soup = BeautifulSoup(res.text, 'html.parser')
         price_tag = soup.select_one('span[class*="Fz(32px)"]')
@@ -63,15 +91,15 @@ def fetch_tw_night_session():
             diff = -float(val_part) if is_down else float(val_part)
             prev = curr - diff
             pct = (diff / prev) * 100 if prev != 0 else 0
-            return {"name": name, "price": curr, "diff": diff, "pct": pct, "time": up_time, "error": False}
+            return {"name": name, "icon": icon, "price": curr, "diff": diff, "pct": pct, "time": up_time, "error": False}
     except: pass
-    return {"name": name, "price": 0, "diff": 0, "pct": 0, "time": "--", "error": True}
+    return {"name": name, "icon": icon, "price": 0, "diff": 0, "pct": 0, "time": "--", "error": True}
 
 @st.cache_data(ttl=10)
 def fetch_market_data():
-    us_tickers = {"^DJI": "🇺🇸 道瓊工業", "^IXIC": "🇺🇸 那斯達克", "^SOX": "🇺🇸 費城半導體", "NVDA": "🟢 輝達 NVIDIA", "TSM": "🔴 台積電 ADR"}
-    tw_tickers = {"^TWII": "🇹🇼 台股加權 (大盤)", "2330.TW": "🔴 台積電 (台股)", "2454.TW": "🔵 聯發科 (台股)"}
-    def get_data(tickers):
+    us_tickers = {"^DJI": "道瓊工業", "^IXIC": "那斯達克", "^SOX": "費城半導體", "NVDA": "輝達 NVIDIA", "TSM": "台積電 ADR"}
+    tw_tickers = {"^TWII": "台股加權 (大盤)", "2330.TW": "台積電 (台股)", "2454.TW": "聯發科 (台股)"}
+    def get_data(tickers, prefix):
         results = []
         for sym, name in tickers.items():
             try:
@@ -87,12 +115,12 @@ def fetch_market_data():
                 if curr > 0:
                     diff = curr - prev
                     pct = (diff / prev) * 100 if prev != 0 else 0
-                    results.append({"name": name, "price": curr, "diff": diff, "pct": pct, "time": data_time, "error": False})
-                else: results.append({"name": name, "price": 0, "diff": 0, "pct": 0, "time": "--", "error": True})
-            except: results.append({"name": name, "price": 0, "diff": 0, "pct": 0, "time": "--", "error": True})
+                    results.append({"name": name, "icon": prefix, "price": curr, "diff": diff, "pct": pct, "time": data_time, "error": False})
+                else: results.append({"name": name, "icon": prefix, "price": 0, "diff": 0, "pct": 0, "time": "--", "error": True})
+            except: results.append({"name": name, "icon": prefix, "price": 0, "diff": 0, "pct": 0, "time": "--", "error": True})
         return results
-    us_data = get_data(us_tickers)
-    tw_data = get_data(tw_tickers)
+    us_data = get_data(us_tickers, "🇺🇸")
+    tw_data = get_data(tw_tickers, "🇹🇼")
     tw_data.append(fetch_tw_night_session())
     return us_data, tw_data
 
@@ -156,15 +184,17 @@ def fetch_analysis(etf_list):
 # --- 4. 介面渲染器 ---
 def render_custom_card(data):
     if data.get('error') or data['price'] == 0:
-        b_color, p_str, c_str, t_str = "#3b82f6", "讀取中...", "連線中", ""
+        b_color, p_str, c_str, t_str, l_dot = "#3b82f6", "讀取中...", "連線中", "", "🔵"
     else:
-        b_color = "#ef4444" if data['diff'] >= 0 else "#22c55e"
+        if data['diff'] > 0: b_color, l_dot = "#ef4444", "🔴"
+        elif data['diff'] < 0: b_color, l_dot = "#22c55e", "🟢"
+        else: b_color, l_dot = "#3b82f6", "🔵"
         p_str, c_str = f"{data['price']:,.2f}", f"{data['diff']:+,.2f} ({data['pct']:.2f}%)"
         t_str = f"🕒 {data['time']}"
     html = f"""
     <div style="background-color: white; border-radius: 10px; padding: 15px; margin-bottom: 15px; border: 1px solid #e5e7eb; border-left: 6px solid {b_color};">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-            <div style="font-size: 14px; color: #3b82f6; font-weight: bold;">{data['name']}</div>
+            <div style="font-size: 14px; color: #3b82f6; font-weight: bold;">{l_dot} {data['icon']} {data['name']}</div>
             <div style="font-size: 11px; color: #9ca3af;">{t_str}</div>
         </div>
         <div style="font-size: 28px; font-weight: 900; color: #111827;">{p_str}</div>
@@ -174,7 +204,21 @@ def render_custom_card(data):
     st.markdown(html, unsafe_allow_html=True)
 
 # --- 5. 主介面 ---
-st.title("📱 ETF 隨身戰情室")
+st.title("📱 RAY ETF 隨身戰情室")
+
+# --- 雙重備援機制新聞區 ---
+news_data = fetch_finance_news()
+news_items_html = "".join([f'<li style="margin-bottom:8px;"><a href="{n["link"]}" target="_blank" style="text-decoration:none; color:#1e3a8a; font-weight:500; font-size:16px;">{n["title"]}</a></li>' for n in news_data])
+
+st.markdown(f"""
+    <div style="background-color: #f0f7ff; border-radius: 12px; padding: 20px; border-left: 6px solid #3b82f6; margin-bottom: 25px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+        <h4 style="margin-top:0; color:#1e40af; display:flex; align-items:center; gap:8px;">🗞️ 今日財經焦點</h4>
+        <ul style="margin-bottom:0; padding-left:25px; list-style-type: '👉 ';">
+            {news_items_html}
+        </ul>
+    </div>
+""", unsafe_allow_html=True)
+
 df, g_mkt, g_pnl, g_cost, g_months, g_annual, g_reminders, g_day_change = fetch_analysis(st.session_state.my_data['etfs'])
 
 if g_reminders:
@@ -183,7 +227,7 @@ if g_reminders:
         st.markdown(f'<div class="blink-box"><span style="font-size: 20px;">💰 🚨</span> <b style="color: #b91c1c; font-size: 18px;"> 除息預告：</b> <span style="color: #b91c1c; font-size: 18px;">{r["code"]} 將於 {r["date"]} 除息！</span></div>', unsafe_allow_html=True)
 
 us_data, tw_data = fetch_market_data()
-st.markdown("### 🌎 關鍵美股指標")
+st.markdown("### 🌍 關鍵美股指標")
 c1, c2, c3 = st.columns(3)
 with c1: render_custom_card(us_data[0]); render_custom_card(us_data[3])
 with c2: render_custom_card(us_data[1]); render_custom_card(us_data[4])
@@ -208,7 +252,6 @@ month_order = [f"{m}月" for m in range(1, 13)]
 monthly_totals = [g_months[m]["total"] for m in month_order]
 chart_df = pd.DataFrame({"月份": month_order, "領息金額": monthly_totals})
 
-# 修正：使用空列表 [] 而非 None，安全關閉手機端懸浮提示
 chart = alt.Chart(chart_df).mark_bar(color="#3b82f6", cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
     x=alt.X("月份:N", sort=month_order, axis=alt.Axis(labelAngle=0)),
     y=alt.Y("領息金額:Q", title="金額 ($)"),
@@ -217,22 +260,6 @@ chart = alt.Chart(chart_df).mark_bar(color="#3b82f6", cornerRadiusTopLeft=5, cor
 
 st.altair_chart(chart, use_container_width=True)
 st.metric("預估年領總息", f"${g_annual:,.0f}")
-
-with st.expander("🔄 轉倉模擬：正二 ➔ 00878"):
-    p_631l = 0; p_878 = 0
-    for idx, row in df.iterrows():
-        if "00631L" in row['代號名稱']: p_631l = row['現價']
-        if "00878" in row['代號名稱']: p_878 = row['現價']
-    s_631l = 0
-    for item in st.session_state.my_data['etfs']:
-        if item['symbol'] == "00631L.TW": s_631l = item['shares']
-    if p_631l > 0 and p_878 > 0:
-        total_value = s_631l * p_631l
-        new_shares_878 = int(total_value / p_878)
-        added_annual_div = new_shares_878 * 2.64
-        st.write(f"目前正二：**{int(s_631l/1000)} 張**，市值約：**${total_value:,.0f}**")
-        st.write(f"可換購 00878：**{int(new_shares_878/1000)} 張**")
-        st.success(f"💰 預計年領股息將增加：**+${added_annual_div:,.0f}**")
 
 with st.expander("🛠 資產管理"):
     updated_list = []
