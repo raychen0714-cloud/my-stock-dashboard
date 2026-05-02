@@ -51,32 +51,20 @@ def fetch_tw_night_session():
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
         res = requests.get(url, headers=headers, timeout=5)
         soup = BeautifulSoup(res.text, 'html.parser')
-        
-        # 抓取主價格
         price_tag = soup.select_one('span[class*="Fz(32px)"]')
-        # 抓取漲跌點數與百分比 (修正核心：定位更精準的 CSS Selector)
         change_tag = soup.select_one('span[class*="Fz(20px)"]')
-        
         up_time = datetime.now().strftime('%m/%d %H:%M')
-        
         if price_tag and change_tag:
             curr = float(price_tag.text.replace(',', ''))
             change_text = change_tag.text.replace(',', '').strip()
-            
-            # 解析符號與數值
             is_down = "▼" in change_text or "-" in change_text
             clean_val = change_text.replace('▼', '').replace('▲', '').replace('+', '').replace('-', '').strip()
-            
-            # 處理點數與百分比 (例如: "150.00 (0.38%)")
             val_part = clean_val.split(' ')[0]
             diff = -float(val_part) if is_down else float(val_part)
-            
             prev = curr - diff
             pct = (diff / prev) * 100 if prev != 0 else 0
-            
             return {"name": name, "price": curr, "diff": diff, "pct": pct, "time": up_time, "error": False}
-    except Exception as e:
-        pass
+    except: pass
     return {"name": name, "price": 0, "diff": 0, "pct": 0, "time": "--", "error": True}
 
 @st.cache_data(ttl=10)
@@ -134,11 +122,9 @@ def fetch_analysis(etf_list):
                 prev_p = tk.fast_info.get('regularMarketPreviousClose', curr_p)
             day_chg = (curr_p - prev_p) * item['shares']
             cfg = div_cfg.get(item['symbol'], {"m": [], "d": "無", "v": 0.0})
-            
             status_light = "🔵"
             if day_chg > 0: status_light = "🔴"
             elif day_chg < 0: status_light = "🟢"
-
             recovery_str = "—"
             if cfg['v'] > 0:
                 if curr_p >= item['cost']: recovery_str = f"✅ 已填息 ({today.strftime('%Y/%m/%d')})"
@@ -146,17 +132,14 @@ def fetch_analysis(etf_list):
                     gap = item['cost'] - curr_p
                     if gap < cfg['v']: recovery_str = f"⏳ 填息 {max(0, (1-(gap/cfg['v']))*100):.0f}%"
                     else: recovery_str = "貼息中"
-
             if cfg["d"] != "無" and 0 <= (datetime.strptime(cfg["d"], "%Y-%m-%d") - today).days <= 25:
                 reminders.append({"code": item['symbol'].split('.')[0], "date": datetime.strptime(cfg["d"], "%Y-%m-%d").strftime("%m/%d")})
-            
             cash = cfg['v'] * item['shares']
             for m in cfg["m"]:
                 m_stats[f"{m}月"]["total"] += cash
                 m_stats[f"{m}月"]["detail"].append({"code": item['symbol'].split('.')[0], "amount": cash})
                 annual_total += cash
             t_mkt += (item['shares'] * curr_p); t_pnl += item['manual_pnl']; t_cost += (item['shares'] * item['cost']); t_day_change += day_chg
-            
             res.append({
                 "狀態": status_light,
                 "代號名稱": f"{item['symbol'].split('.')[0]} {item['name']}", 
@@ -179,7 +162,7 @@ def render_custom_card(data):
         p_str, c_str = f"{data['price']:,.2f}", f"{data['diff']:+,.2f} ({data['pct']:.2f}%)"
         t_str = f"🕒 {data['time']}"
     html = f"""
-    <div style="background-color: white; border-radius: 10px; padding: 15px; margin-bottom: 15px; border: 1px solid #e5e7eb; border-left: 6px solid {b_color}; shadow: none;">
+    <div style="background-color: white; border-radius: 10px; padding: 15px; margin-bottom: 15px; border: 1px solid #e5e7eb; border-left: 6px solid {b_color};">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
             <div style="font-size: 14px; color: #3b82f6; font-weight: bold;">{data['name']}</div>
             <div style="font-size: 11px; color: #9ca3af;">{t_str}</div>
@@ -195,21 +178,9 @@ st.title("📱 ETF 隨身戰情室")
 df, g_mkt, g_pnl, g_cost, g_months, g_annual, g_reminders, g_day_change = fetch_analysis(st.session_state.my_data['etfs'])
 
 if g_reminders:
-    st.markdown("""
-        <style>
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
-        .blink-box { 
-            animation: blink 1.2s linear infinite; 
-            background-color: #fee2e2; 
-            padding: 15px; 
-            border-radius: 10px; 
-            margin-bottom: 20px; 
-            border: 2px solid #ef4444; 
-        }
-        </style>
-    """, unsafe_allow_html=True)
+    st.markdown("""<style>@keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } } .blink-box { animation: blink 1.2s linear infinite; background-color: #fee2e2; padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 2px solid #ef4444; }</style>""", unsafe_allow_html=True)
     for r in g_reminders:
-        st.markdown(f'<div class="blink-box"><span style="font-size: 20px;">💰 🚨</span> <b style="color: #b91c1c; font-size: 18px;"> 除息預告：</b> <span style="color: #b91c1c; font-size: 18px;">{r["code"]} 將於 {r["date"]} 除息，請留意資金配置！</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="blink-box"><span style="font-size: 20px;">💰 🚨</span> <b style="color: #b91c1c; font-size: 18px;"> 除息預告：</b> <span style="color: #b91c1c; font-size: 18px;">{r["code"]} 將於 {r["date"]} 除息！</span></div>', unsafe_allow_html=True)
 
 us_data, tw_data = fetch_market_data()
 st.markdown("### 🌎 關鍵美股指標")
@@ -229,21 +200,19 @@ with mc1: st.markdown(f"<div style='text-align:center; background-color:#f8fafc;
 with mc2: st.markdown(f"<div style='text-align:center; background-color:#f8fafc; padding:10px; border-radius:10px;'>累積總損益<h2 style='color:{p_col}; margin:0;'>${g_pnl:,.0f}</h2></div>", unsafe_allow_html=True)
 
 if not df.empty:
-    st.dataframe(df.style.format({"現價":"{:.2f}","今日漲跌":"{:+,.0f}","累積損益":"{:,.0f}"})
-    .map(lambda x: f'color:{"red" if (isinstance(x, (int,float)) and x>0) or str(x).startswith("+") else "green" if (isinstance(x, (int,float)) and x<0) or str(x).startswith("-") else "black"};font-weight:bold;', subset=['累積損益', '今日漲跌']), use_container_width=True, hide_index=True)
+    st.dataframe(df.style.format({"現價":"{:.2f}","今日漲跌":"{:+,.0f}","累積損益":"{:,.0f}"}).map(lambda x: f'color:{"red" if (isinstance(x, (int,float)) and x>0) or str(x).startswith("+") else "green" if (isinstance(x, (int,float)) and x<0) or str(x).startswith("-") else "black"};font-weight:bold;', subset=['累積損益', '今日漲跌']), use_container_width=True, hide_index=True)
 
 st.divider()
-
-# --- 領息視覺化圖表 ---
 st.subheader("🗓️ 領息視覺化戰情牆")
 month_order = [f"{m}月" for m in range(1, 13)]
 monthly_totals = [g_months[m]["total"] for m in month_order]
 chart_df = pd.DataFrame({"月份": month_order, "領息金額": monthly_totals})
 
+# 修正：使用空列表 [] 而非 None，安全關閉手機端懸浮提示
 chart = alt.Chart(chart_df).mark_bar(color="#3b82f6", cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
     x=alt.X("月份:N", sort=month_order, axis=alt.Axis(labelAngle=0)),
     y=alt.Y("領息金額:Q", title="金額 ($)"),
-    tooltip=["月份", "領息金額"]
+    tooltip=[] 
 ).properties(height=350)
 
 st.altair_chart(chart, use_container_width=True)
@@ -257,7 +226,6 @@ with st.expander("🔄 轉倉模擬：正二 ➔ 00878"):
     s_631l = 0
     for item in st.session_state.my_data['etfs']:
         if item['symbol'] == "00631L.TW": s_631l = item['shares']
-        
     if p_631l > 0 and p_878 > 0:
         total_value = s_631l * p_631l
         new_shares_878 = int(total_value / p_878)
@@ -265,7 +233,6 @@ with st.expander("🔄 轉倉模擬：正二 ➔ 00878"):
         st.write(f"目前正二：**{int(s_631l/1000)} 張**，市值約：**${total_value:,.0f}**")
         st.write(f"可換購 00878：**{int(new_shares_878/1000)} 張**")
         st.success(f"💰 預計年領股息將增加：**+${added_annual_div:,.0f}**")
-    else: st.warning("數據讀取中...")
 
 with st.expander("🛠 資產管理"):
     updated_list = []
